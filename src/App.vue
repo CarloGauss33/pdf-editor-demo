@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { inject, ref, computed } from "vue";
 import { pocketBaseSymbol } from './symbols/injectionSymbols';
+import PdfLayer from "./components/pdfLayer.vue";
 
 const $pb = inject(pocketBaseSymbol);
 const isUploading = ref(false);
@@ -8,6 +9,16 @@ const isUploading = ref(false);
 const uploadedFile = ref<File>();
 const beingDragged = ref(false);
 const uploadedFileSubmittedId = ref<string>('');
+
+interface PocketBaseUploadedPdf {
+  collectionName?: string;
+  collectionId?: string;
+  id?: string;
+  original_file?: string;
+  commented_file?: string;
+}
+
+const pocketBaseUploadedPdf = ref<PocketBaseUploadedPdf>({})
 
 function onFileChange(e: Event) {
   const target = e.target as HTMLInputElement;
@@ -26,12 +37,21 @@ async function submitFile() {
   formData.append("original_file", uploadedFile.value!);
 
   try {
-    const response = await $pb?.collection('pdf_demo').create(formData);
-    uploadedFileSubmittedId.value = response?.id || '';
+    const response = await $pb?.collection('pdf_demo').create(formData) as PocketBaseUploadedPdf;
+    pocketBaseUploadedPdf.value = response;
   } catch (error) {
     console.log(error);
   }
 }
+
+const fileUrl = computed(() => {
+  if (!pocketBaseUploadedPdf.value.id) {
+    return '';
+  }
+  const BASE_URL = import.meta.env.VITE_POCKETBASE_URL;
+  const { id, collectionName, original_file } = pocketBaseUploadedPdf.value;
+  return `${BASE_URL}/api/files/${collectionName}/${id}/${original_file}`;
+});
 
 function onDragEnter(e: DragEvent) {
   e.preventDefault();
@@ -66,19 +86,20 @@ function onDragOver(e: DragEvent) {
         @drop="onFileChange"
       />
       <button
-        :disabled="isUploading || !uploadedFile || uploadedFileSubmittedId !== ''"
+        :disabled="isUploading"
         :class="{
-          'btn btn-disabled': !uploadedFile || isUploading || uploadedFileSubmittedId,
+          'btn btn-disabled': !uploadedFile || isUploading,
           'loading': isUploading
         }"
         class="btn btn-primary btn-lg w-full max-w-md"
         @click="submitFile"
       >
-        {{ uploadedFileSubmittedId ? 'Ya subiste un archivo' : 'Subir archivo' }}
+        {{ isUploading ? 'Subiendo...' : 'Subir' }}
       </button>
 
     </div>
     <div class="card p-4 h-full bg-base-100 shadow-xl col-span-2 flex flex-row justify-center items-center">
+      <pdf-layer :pdfUrl="fileUrl" />
     </div>
   </div>
 </template>
